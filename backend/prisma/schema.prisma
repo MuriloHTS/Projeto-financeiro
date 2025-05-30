@@ -1,0 +1,220 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Tabela de Usuários
+model Usuario {
+  id          Int      @id @default(autoincrement())
+  nome        String
+  email       String   @unique
+  senha_hash  String
+  ativo       Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  
+  // Relacionamento com empresa
+  empresas    Empresa[]
+  
+  @@map("usuarios")
+}
+
+// Tabela de Empresas
+model Empresa {
+  id              Int      @id @default(autoincrement())
+  nome            String
+  cnpj            String?  @unique
+  cpf             String?  @unique
+  tipo_pessoa     String   // 'fisica' ou 'juridica'
+  ramo_atividade  String
+  telefone        String?
+  email           String?
+  endereco        String?
+  ativa           Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  
+  // Foreign Key
+  usuario_id      Int
+  usuario         Usuario  @relation(fields: [usuario_id], references: [id])
+  
+  // Relacionamentos
+  premissas           Premissa[]
+  despesas_fixas      DespesaFixa[]
+  valores_realizados  ValorRealizado[]
+  lancamentos         LancamentoPontual[]
+  
+  @@map("empresas")
+}
+
+// Tabela de Premissas Orçamentárias (NOVA VERSÃO GENÉRICA)
+model Premissa {
+  id                    Int      @id @default(autoincrement())
+  ano                   Int
+  receita_total_mensal  Decimal  @db.Decimal(15, 2)
+  meta_anual           Decimal? @db.Decimal(15, 2)
+  observacoes          String?
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+  
+  // Foreign Key
+  empresa_id           Int
+  empresa              Empresa  @relation(fields: [empresa_id], references: [id])
+  
+  // Relacionamentos
+  categorias_receita   CategoriaReceita[]
+  
+  // Índice único por empresa/ano
+  @@unique([empresa_id, ano])
+  @@map("premissas")
+}
+
+// NOVA TABELA: Categorias de Receita Personalizáveis
+model CategoriaReceita {
+  id            Int      @id @default(autoincrement())
+  nome          String   // "Resfriadores", "Vendas Online", "Consultorias", etc.
+  valor_mensal  Decimal  @db.Decimal(15, 2)
+  percentual    Decimal? @db.Decimal(5, 2) // % da receita total
+  cor           String?  // Cor para gráficos (#FF5733)
+  icone         String?  // Nome do ícone (opcional)
+  ativa         Boolean  @default(true)
+  ordem         Int      @default(0) // Para ordenação no frontend
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  
+  // Foreign Key
+  premissa_id   Int
+  premissa      Premissa @relation(fields: [premissa_id], references: [id], onDelete: Cascade)
+  
+  @@map("categorias_receita")
+}
+
+// Tabela de Despesas Fixas (MELHORADA)
+model DespesaFixa {
+  id           Int      @id @default(autoincrement())
+  categoria    String   // "Administrativas", "Operacionais", "Financeiras"
+  subcategoria String?  // "Telefone", "Internet", "Energia", etc.
+  descricao    String?  // Descrição detalhada
+  valor_mensal Decimal  @db.Decimal(15, 2)
+  cor          String?  // Cor para gráficos
+  ativa        Boolean  @default(true)
+  ordem        Int      @default(0)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  
+  // Foreign Key
+  empresa_id   Int
+  empresa      Empresa  @relation(fields: [empresa_id], references: [id])
+  
+  @@map("despesas_fixas")
+}
+
+// Tabela de Valores Realizados (MELHORADA)
+model ValorRealizado {
+  id         Int      @id @default(autoincrement())
+  ano        Int
+  mes        Int      // 1-12
+  valor      Decimal  @db.Decimal(15, 2)
+  observacao String?
+  fonte      String?  // "Manual", "Importado", "API"
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  // Foreign Key
+  empresa_id Int
+  empresa    Empresa  @relation(fields: [empresa_id], references: [id])
+  
+  // Relacionamentos
+  detalhes_realizados DetalheRealizado[]
+  
+  // Índice único por empresa/ano/mês
+  @@unique([empresa_id, ano, mes])
+  @@map("valores_realizados")
+}
+
+// NOVA TABELA: Detalhes dos Valores Realizados por Categoria
+model DetalheRealizado {
+  id                  Int      @id @default(autoincrement())
+  categoria_nome      String   // Nome da categoria
+  valor               Decimal  @db.Decimal(15, 2)  // ← CORRIGIDO: era valor_realizado
+  created_at         DateTime @default(now())
+  
+  // Foreign Key
+  valor_realizado_id Int
+  valorRealizado     ValorRealizado @relation(fields: [valor_realizado_id], references: [id], onDelete: Cascade)  // ← CORRIGIDO: era valor_realizado
+  
+  @@map("detalhes_realizados")
+}
+
+// Tabela de Lançamentos Pontuais (MELHORADA)
+model LancamentoPontual {
+  id               Int      @id @default(autoincrement())
+  data             DateTime
+  descricao        String
+  valor            Decimal  @db.Decimal(15, 2)
+  tipo             String   // 'receita' ou 'despesa'
+  categoria        String   // Categoria personalizável
+  subcategoria     String?  // Subcategoria opcional
+  observacao       String?
+  numero_documento String?  // NF, recibo, etc.
+  anexo_url        String?  // URL do arquivo anexo
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+  
+  // Foreign Key
+  empresa_id       Int
+  empresa          Empresa  @relation(fields: [empresa_id], references: [id])
+  
+  @@map("lancamentos_pontuais")
+}
+
+// Tabela de Templates de Categorias (NOVA)
+model TemplateCategoria {
+  id              Int      @id @default(autoincrement())
+  nome            String
+  ramo_atividade  String   // "refrigeracao", "ecommerce", "consultoria"
+  tipo            String   // "receita" ou "despesa"
+  categorias      Json     // Array de categorias padrão
+  descricao       String?
+  ativo           Boolean  @default(true)
+  created_at      DateTime @default(now())
+  
+  @@map("templates_categorias")
+}
+
+// Tabela de Logs/Auditoria
+model LogAuditoria {
+  id         Int      @id @default(autoincrement())
+  usuario_id Int?
+  empresa_id Int?
+  acao       String   // 'CREATE', 'UPDATE', 'DELETE'
+  tabela     String
+  registro_id Int?
+  dados_antes Json?
+  dados_depois Json?
+  ip_address String?
+  user_agent String?
+  created_at DateTime @default(now())
+  
+  @@map("logs_auditoria")
+}
+
+// Tabela de Configurações do Sistema
+model Configuracao {
+  id         Int      @id @default(autoincrement())
+  chave      String   @unique
+  valor      String
+  descricao  String?
+  ativa      Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  @@map("configuracoes")
+}

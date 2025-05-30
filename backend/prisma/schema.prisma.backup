@@ -1,0 +1,162 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Tabela de Usuários
+model Usuario {
+  id          Int      @id @default(autoincrement())
+  nome        String
+  email       String   @unique
+  senha_hash  String
+  ativo       Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  
+  // Relacionamento com empresa
+  empresas    Empresa[]
+  
+  @@map("usuarios")
+}
+
+// Tabela de Empresas
+model Empresa {
+  id              Int      @id @default(autoincrement())
+  nome            String
+  cnpj            String?  @unique
+  cpf             String?  @unique
+  tipo_pessoa     String   // 'fisica' ou 'juridica'
+  ramo_atividade  String
+  telefone        String?
+  email           String?
+  endereco        String?
+  ativa           Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  
+  // Foreign Key
+  usuario_id      Int
+  usuario         Usuario  @relation(fields: [usuario_id], references: [id])
+  
+  // Relacionamentos
+  premissas           Premissa[]
+  despesas_fixas      DespesaFixa[]
+  valores_realizados  ValorRealizado[]
+  lancamentos         LancamentoPontual[]
+  
+  @@map("empresas")
+}
+
+// Tabela de Premissas Orçamentárias
+model Premissa {
+  id                  Int      @id @default(autoincrement())
+  ano                 Int
+  receita_operacional Decimal  @db.Decimal(15, 2)
+  resfriadores        Decimal  @db.Decimal(15, 2) @default(0)
+  insunfladores       Decimal  @db.Decimal(15, 2) @default(0)
+  exaustores          Decimal  @db.Decimal(15, 2) @default(0)
+  splits              Decimal  @db.Decimal(15, 2) @default(0)
+  outros              Decimal  @db.Decimal(15, 2) @default(0)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  
+  // Foreign Key
+  empresa_id          Int
+  empresa             Empresa  @relation(fields: [empresa_id], references: [id])
+  
+  // Índice único por empresa/ano
+  @@unique([empresa_id, ano])
+  @@map("premissas")
+}
+
+// Tabela de Despesas Fixas
+model DespesaFixa {
+  id           Int      @id @default(autoincrement())
+  categoria    String
+  subcategoria String?
+  valor_mensal Decimal  @db.Decimal(15, 2)
+  ativa        Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  
+  // Foreign Key
+  empresa_id   Int
+  empresa      Empresa  @relation(fields: [empresa_id], references: [id])
+  
+  @@map("despesas_fixas")
+}
+
+// Tabela de Valores Realizados
+model ValorRealizado {
+  id         Int      @id @default(autoincrement())
+  ano        Int
+  mes        Int      // 1-12
+  valor      Decimal  @db.Decimal(15, 2)
+  observacao String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  // Foreign Key
+  empresa_id Int
+  empresa    Empresa  @relation(fields: [empresa_id], references: [id])
+  
+  // Índice único por empresa/ano/mês
+  @@unique([empresa_id, ano, mes])
+  @@map("valores_realizados")
+}
+
+// Tabela de Lançamentos Pontuais
+model LancamentoPontual {
+  id         Int      @id @default(autoincrement())
+  data       DateTime
+  descricao  String
+  valor      Decimal  @db.Decimal(15, 2)
+  tipo       String   // 'receita' ou 'despesa'
+  categoria  String
+  observacao String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  // Foreign Key
+  empresa_id Int
+  empresa    Empresa  @relation(fields: [empresa_id], references: [id])
+  
+  @@map("lancamentos_pontuais")
+}
+
+// Tabela de Logs/Auditoria
+model LogAuditoria {
+  id         Int      @id @default(autoincrement())
+  usuario_id Int?
+  empresa_id Int?
+  acao       String   // 'CREATE', 'UPDATE', 'DELETE'
+  tabela     String
+  registro_id Int?
+  dados_antes Json?
+  dados_depois Json?
+  ip_address String?
+  user_agent String?
+  created_at DateTime @default(now())
+  
+  @@map("logs_auditoria")
+}
+
+// Tabela de Configurações do Sistema
+model Configuracao {
+  id         Int      @id @default(autoincrement())
+  chave      String   @unique
+  valor      String
+  descricao  String?
+  ativa      Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  @@map("configuracoes")
+}
